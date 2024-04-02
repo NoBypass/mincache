@@ -30,7 +30,14 @@ func New() *CacheInstance {
 		signal: make(chan struct{}),
 	}
 	heap.Init(&cache.queue)
-	go cache.cleanup()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		cache.cleanup()
+	}()
+	wg.Wait()
 	return &cache
 }
 
@@ -42,7 +49,7 @@ func (c *CacheInstance) Get(key string) (value any, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	item, ok := c.store[key]
-	if !ok || time.Now().UnixNano() > item.Expiration {
+	if !ok || (time.Now().UnixNano() > item.Expiration && item.Expiration != 0) {
 		delete(c.store, key)
 		return nil, false
 	}
@@ -50,12 +57,13 @@ func (c *CacheInstance) Get(key string) (value any, ok bool) {
 }
 
 func (c *CacheInstance) Set(key string, value any, duration time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	expiration := time.Now().Add(duration).UnixNano()
 	if duration == 0 {
 		expiration = 0
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if item, ok := c.store[key]; ok {
 		item.Value = value
@@ -97,9 +105,14 @@ func (c *CacheInstance) cleanup() {
 		}
 		c.mu.Unlock()
 
+		timer := time.After(time.Hour * 24)
+		if len(c.queue) > 0 {
+			timer = time.After(time.Until(time.Unix(0, c.queue[0].Expiration)))
+		}
+
 		select {
 		case <-c.signal:
-		case <-time.After(time.Until(time.Unix(0, c.queue[0].Expiration))):
+		case <-timer:
 		case <-c.close:
 			return
 		}
