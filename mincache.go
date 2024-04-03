@@ -6,27 +6,27 @@ import (
 	"time"
 )
 
-type ItemHeap []*Item
+type itemHeap []*cacheItem
 
-type Item struct {
+type cacheItem struct {
 	Key        string
 	Value      any
 	Expiration int64
 	Index      int
 }
 
-type CacheInstance struct {
-	store  map[string]*Item
-	queue  ItemHeap
+type Cache struct {
+	store  map[string]*cacheItem
+	queue  itemHeap
 	mu     sync.RWMutex
 	signal chan struct{}
 	close  chan struct{}
 }
 
-func New() *CacheInstance {
-	cache := CacheInstance{
-		store:  make(map[string]*Item),
-		queue:  make(ItemHeap, 0),
+func New() *Cache {
+	cache := Cache{
+		store:  make(map[string]*cacheItem),
+		queue:  make(itemHeap, 0),
 		signal: make(chan struct{}),
 	}
 	heap.Init(&cache.queue)
@@ -41,11 +41,11 @@ func New() *CacheInstance {
 	return &cache
 }
 
-func (c *CacheInstance) Close() {
+func (c *Cache) Close() {
 	close(c.close)
 }
 
-func (c *CacheInstance) Get(key string) (value any, ok bool) {
+func (c *Cache) Get(key string) (value any, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	item, ok := c.store[key]
@@ -56,7 +56,7 @@ func (c *CacheInstance) Get(key string) (value any, ok bool) {
 	return item.Value, true
 }
 
-func (c *CacheInstance) Set(key string, value any, duration time.Duration) {
+func (c *Cache) Set(key string, value any, duration time.Duration) {
 	expiration := time.Now().Add(duration).UnixNano()
 	if duration == 0 {
 		expiration = 0
@@ -70,7 +70,7 @@ func (c *CacheInstance) Set(key string, value any, duration time.Duration) {
 		item.Expiration = expiration
 		heap.Fix(&c.queue, item.Index)
 	} else {
-		item = &Item{
+		item = &cacheItem{
 			Key:        key,
 			Value:      value,
 			Expiration: expiration,
@@ -82,7 +82,7 @@ func (c *CacheInstance) Set(key string, value any, duration time.Duration) {
 	c.signal <- struct{}{}
 }
 
-func (c *CacheInstance) Delete(key string) {
+func (c *Cache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if item, ok := c.store[key]; ok {
@@ -91,11 +91,11 @@ func (c *CacheInstance) Delete(key string) {
 	}
 }
 
-func (c *CacheInstance) cleanup() {
+func (c *Cache) cleanup() {
 	for {
 		c.mu.Lock()
 		for len(c.queue) > 0 {
-			item := heap.Pop(&c.queue).(*Item)
+			item := heap.Pop(&c.queue).(*cacheItem)
 			if time.Now().UnixNano() > item.Expiration && item.Expiration != 0 {
 				delete(c.store, item.Key)
 			} else {
