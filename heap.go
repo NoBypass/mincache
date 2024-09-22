@@ -5,7 +5,7 @@ func (h itemHeap) Len() int {
 }
 
 func (h itemHeap) Less(i, j int) bool {
-	return h[i].Expiration < h[j].Expiration
+	return h[i].Expiration.expiration().Before(h[j].Expiration.expiration())
 }
 
 func (h itemHeap) Swap(i, j int) {
