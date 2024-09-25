@@ -96,6 +96,19 @@ func Test(t *testing.T) {
 		_, ok = c.Get("key4")
 		assert.True(t, ok)
 	})
+	t.Run("Test dureation if value was overwritten", func(t *testing.T) {
+		t.Parallel()
+		c := New()
+		c.Set("key", "value", ExpireIn(1*time.Second))
+		c.Set("key", "value2", ExpireIn(3*time.Second))
+		time.Sleep(2 * time.Second)
+		v, ok := c.Get("key")
+		assert.True(t, ok)
+		assert.Equal(t, "value2", v)
+		time.Sleep(2 * time.Second)
+		_, ok = c.Get("key")
+		assert.False(t, ok)
+	})
 }
 
 func TestSafe(t *testing.T) {
