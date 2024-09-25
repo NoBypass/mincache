@@ -10,6 +10,9 @@ func NewSafe[K, V any]() SafeCache[K, V] {
 
 func (sc *SafeCache[K, V]) Get(key K) (V, bool) {
 	v, ok := sc.Cache.Get(key)
+	if !ok {
+		return v, ok
+	}
 	return v.(V), ok
 }
 
